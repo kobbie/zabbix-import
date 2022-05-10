@@ -2,12 +2,12 @@
 # -*- coding:utf-8 -*-
 
 """
-Import XML configuration files using Zabbix API.
+Import configuration files using Zabbix API.
 Detailed information about zabbix templates import/export using the
 Zabbix Web-UI and Zabbix API usage for import configurations,
 available at:
-    https://www.zabbix.com/documentation/4.0/manual/xml_export_import/templates#importing
-    https://www.zabbix.com/documentation/4.0/manual/api/reference/configuration/import
+    https://www.zabbix.com/documentation/6.0/manual/xml_export_import/templates#importing
+    https://www.zabbix.com/documentation/6.0/manual/api/reference/configuration/import
 """
 from argparse import ArgumentParser, RawTextHelpFormatter
 import json
@@ -24,16 +24,47 @@ import traceback
 
 DEFAULT_ZABBIX_API_URL = 'http://127.0.0.1:80/api_jsonrpc.php'
 ELEMENTS_OPTIONS_DICT = {
-    'createMissing': ['applications', 'discoveryRules', 'graphs', 'groups',
-                      'hosts', 'httptests', 'images', 'items', 'maps',
-                      'screens', 'templateLinkage', 'templates',
-                      'templateScreens', 'triggers', 'valueMaps'],
-    'updateExisting': ['discoveryRules', 'graphs',
-                       'hosts', 'httptests', 'images', 'items', 'maps',
-                       'screens', 'templates',
-                       'templateScreens', 'triggers', 'valueMaps'],
-    'deleteMissing': ['applications', 'discoveryRules', 'graphs',
-                      'httptests', 'items', 'templateScreens', 'triggers'],
+    'createMissing': [
+        'discoveryRules',
+        'graphs',
+        'groups',
+        'hosts',
+        'httptests',
+        'images',
+        'items',
+        'maps',
+        'mediaTypes',
+        'templateLinkage',
+        'templates',
+        'templateDashboards',
+        'triggers',
+        'valueMaps'
+    ],
+    'updateExisting': [
+        'discoveryRules',
+        'graphs',
+        'groups',
+        'hosts',
+        'httptests',
+        'images',
+        'items',
+        'maps',
+        'mediaTypes',
+        'templates',
+        'templateDashboards',
+        'triggers',
+        'valueMaps'
+    ],
+    'deleteMissing':  [
+        'discoveryRules',
+        'graphs',
+        'httptests',
+        'items',
+        'templateLinkage',
+        'templateDashboards',
+        'triggers',
+        'valueMaps'
+    ],
 }
 
 
@@ -47,7 +78,15 @@ def __create_parser():
     parser = ArgumentParser(description=__doc__,
                             formatter_class=RawTextHelpFormatter)
     parser.add_argument('template_file',
-                        help='Zabbix exported template xml file\n')
+                        help='Zabbix exported template file\n')
+    parser.add_argument(
+        '-f', '--format',
+        choices=['yaml', 'xml', 'json'],
+        default='yaml',
+        required=True,
+        help='Specify the file format of template_file.\n'
+             'Default value is: yaml\n'
+    )
     parser.add_argument(
         '-u', '--user',
         help='Use the --user flag to provide the Zabbix API user name.\n'
@@ -69,7 +108,7 @@ def __create_parser():
                              ''.format(DEFAULT_ZABBIX_API_URL))
     parser.add_argument(
         '--no-create-missing', nargs='*', default=None,
-        help='All the elements in the xml file that are missing in the zabbix'
+        help='All the elements in the configuration file that are missing in the zabbix'
              '\ndatabase are being created by default.\nTo unselect the '
              'createMissing option (i.e set false), use this flag\n followed'
              ' by a list of space separated values to be excluded.\nThe '
@@ -81,7 +120,7 @@ def __create_parser():
     )
     parser.add_argument(
         '--no-update-existing', nargs='*', default=None,
-        help='All the elements in the xml file that already exists in the '
+        help='All the elements in the configuration file that already exists in the '
              'zabbix\ndatabase are being updated by default.\nTo unselect the '
              'updateExisting option (i.e set false), use this flag\n followed '
              'by a list of space separated values to be excluded.\nThe '
@@ -95,7 +134,7 @@ def __create_parser():
     parser.add_argument(
         '--delete-missing', nargs='*', default=None,
         help='All the elements that existes in the zabbix database that are '
-             'not\npresent in the xml file are being preserved by default.\n'
+             'not\npresent in the configuration file are being preserved by default.\n'
              'To select the deleteMissing option (i.e set true), use this flag'
              '\nfollowed by a list of space separated values to be included.\n'
              'The available element values are:\n\n{}\n\nIf not any value is '
@@ -140,7 +179,7 @@ def zbxrequest(url, method, auth, params):
         params = {}
     data = {"jsonrpc": "2.0", "id": 1, "method": method,
             "auth": auth, "params": params}
-    headers = {'Content-Type': 'application/json'}
+    headers = {'Content-Type': 'application/json-rpc'}
     # Convert to string and then to byte
     data = json.dumps(data).encode('utf-8')
     req = Request(args.url, headers=headers, data=data)
@@ -148,11 +187,11 @@ def zbxrequest(url, method, auth, params):
     # Get string
     resp = resp.read().decode('utf-8')
     # Convert to object
-    resp = json.loads(resp, encoding='utf-8')
+    resp = json.loads(resp)
     return resp
 
 
-def import_zabbix_template(template_file, user, passwd, url,
+def import_zabbix_template(template_file, format, user, passwd, url,
                            no_create_missing=None,
                            no_update_existing=None, delete_missing=None):
     rules = __build_rules(no_create_missing,
@@ -180,7 +219,7 @@ def import_zabbix_template(template_file, user, passwd, url,
         source = f.read()
 
     # Set import parameters, including template file content
-    params = {'format': 'xml', 'rules': rules, 'source': source}
+    params = {'format': format, 'rules': rules, 'source': source}
 
     import_result = zbxrequest(url, method="configuration.import",
                                auth=auth_token, params=params)
@@ -225,7 +264,7 @@ if __name__ == '__main__':
                                                '_option_string_actions'
                                            ]['--passwd'].help))
     try:
-        import_zabbix_template(args.template_file, args.user, args.passwd,
+        import_zabbix_template(args.template_file, args.format, args.user, args.passwd,
                                args.url, args.no_create_missing,
                                args.no_update_existing, args.delete_missing)
 
