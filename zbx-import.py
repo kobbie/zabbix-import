@@ -6,8 +6,8 @@ Import configuration files using Zabbix API.
 Detailed information about zabbix templates import/export using the
 Zabbix Web-UI and Zabbix API usage for import configurations,
 available at:
-    https://www.zabbix.com/documentation/6.0/manual/xml_export_import/templates#importing
-    https://www.zabbix.com/documentation/6.0/manual/api/reference/configuration/import
+    https://www.zabbix.com/documentation/7.0/manual/xml_export_import/templates#importing
+    https://www.zabbix.com/documentation/7.0/manual/api/reference/configuration/import
 """
 from argparse import ArgumentParser, RawTextHelpFormatter
 import json
@@ -27,7 +27,8 @@ ELEMENTS_OPTIONS_DICT = {
     'createMissing': [
         'discoveryRules',
         'graphs',
-        'groups',
+        'host_groups',
+        'template_groups',
         'hosts',
         'httptests',
         'images',
@@ -43,7 +44,8 @@ ELEMENTS_OPTIONS_DICT = {
     'updateExisting': [
         'discoveryRules',
         'graphs',
-        'groups',
+        'host_groups',
+        'template_groups',
         'hosts',
         'httptests',
         'images',
@@ -204,7 +206,7 @@ def import_zabbix_template(template_file, format, user, passwd, url,
     # Get authentication token
     # https://www.zabbix.com/documentation/3.4/manual/api/reference/user/login
     auth_result = zbxrequest(url, method="user.login", auth=None,
-                             params={"user": user, "password": passwd})
+                             params={"username": user, "password": passwd})
 
     # If authentication was not OK
     if 'result' not in auth_result:
@@ -226,9 +228,10 @@ def import_zabbix_template(template_file, format, user, passwd, url,
     # Something like: {'id': 1, 'jsonrpc': '2.0', 'result': True}
 
     if 'result' in import_result and import_result['result']:
-        print('SUCCESS: configuration import')
+        print('SUCCESS: configuration import:', template_file)
     else:
-        raise ZbxImportError('configuration import failed\n{}'
+        print('FAILURE: configuration import:', template_file)
+        raise ZbxImportError(''
                              ''.format(pformat(import_result)))
 
 
